@@ -63,19 +63,25 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument(
       "--input_ckpt_dir",
+      type=str,
+      required=True,
       help="Location of input Llama weights to be merged",
   )
   parser.add_argument(
       "--model_size",
+      type=str,
+      required=True,
       choices=["7B", "13B", "70B"],
   )
   parser.add_argument(
       "--output_ckpt_dir",
+      type=str,
+      requried=True,
       help="Location of input Llama weights to be merged",
   )
   args = parser.parse_args()
 
-  merge_weight(
+  merge_weights(
       input_ckpt_dir=args.input_ckpt_dir,
       output_ckpt_dir=args.output_ckpt_dir
 
