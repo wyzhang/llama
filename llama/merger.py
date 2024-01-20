@@ -4,6 +4,7 @@ import os
 import shutil
 import torch
 import glob
+from typing import List, Dict
 
 _MODEL_SIZE_TO_NUM_SHARDS_MAP = {
     "7B": 1,
@@ -27,6 +28,17 @@ _LAYER_NAME_TO_SHARDING_TYPE_MAP = {
     'rope.freqs': None,
 }
 
+def have_same_weight_keys(weight_maps:List[Dict[str, torch.Tensor]]):
+  if (not weight_maps) or len(weight_maps) <= 1:
+    return True
+
+  keys = weight_maps[0]
+
+  for m in weight_maps[1:]:
+    if set(weight_maps[0].keys()) != set(m.keys()):
+      return False
+
+  return True
 
 def read_json(path):
   with open(path, "r") as f:
@@ -56,8 +68,13 @@ def merge_weights(
       torch.load(path, map_location=torch.device('cpu'))
       for path in glob.glob(os.path.join(input_ckpt_dir, '*.pth'))
   ]
-  for key in checkpoints.keys():
-    print(f'wyzhang: chekcpoint key is {key}')
+  assert len(checkpoints) > 0, f'No *.pth found in input dir {input_ckpt_dir}'
+
+  assert have_same_weight_keys(checkpoints)
+  weight_keys = checkpoints[0].keys()
+  for key in weight_keys:
+    tensors: List[torch.Tensor]= [c[key] for c in checkpoints]
+    print(f'weight {key} has tensor shapes {[t.shape for t in tensors]}')
 
 def main():
   parser = argparse.ArgumentParser()
