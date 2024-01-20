@@ -37,9 +37,9 @@ def write_json(text, path):
     json.dump(text, f)
 
 def merge_weights(
-    input_ckpt_dir : str,
+    input_ckpt_dir: str,
     model_size: str,
-    output_ckpt_dir : str,
+    output_ckpt_dir: str,
 ) -> None:
   """Merge sharded checkpoint files into a single checkpoint file
 
