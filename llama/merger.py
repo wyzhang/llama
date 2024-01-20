@@ -76,7 +76,7 @@ def main():
   parser.add_argument(
       "--output_ckpt_dir",
       type=str,
-      requried=True,
+      required=True,
       help="Location of input Llama weights to be merged",
   )
   args = parser.parse_args()
