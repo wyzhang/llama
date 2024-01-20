@@ -28,16 +28,21 @@ _LAYER_NAME_TO_SHARDING_TYPE_MAP = {
     'rope.freqs': None,
 }
 
-def have_same_weight_keys(weight_maps:List[Dict[str, torch.Tensor]]):
-  if (not weight_maps) or len(weight_maps) <= 1:
+def checkpoints_have_same_weight_keys(checkpoint_list:List[Dict[str, torch.Tensor]]):
+  if (not checkpoint_list) or len(checkpoint_list) <= 1:
     return True
-
-  keys = weight_maps[0]
-
-  for m in weight_maps[1:]:
-    if set(weight_maps[0].keys()) != set(m.keys()):
+  for m in checkpoint_list[1:]:
+    if set(checkpoint_list[0].keys()) != set(m.keys()):
       return False
+  return True
 
+def tensors_have_same_shape(tensors):
+  if (not tensors) or len(tensors) <= 1:
+    return True
+  # Iterate through the remaining tensors in the list
+  for t in tensors[1:]:
+    if t.shape != tensors[0].shape:
+      return False
   return True
 
 def read_json(path):
@@ -70,11 +75,12 @@ def merge_weights(
   ]
   assert len(checkpoints) > 0, f'No *.pth found in input dir {input_ckpt_dir}'
 
-  assert have_same_weight_keys(checkpoints)
+  assert checkpoints_have_same_weight_keys(checkpoints)
   weight_keys = checkpoints[0].keys()
   for key in weight_keys:
-    tensors: List[torch.Tensor]= [c[key] for c in checkpoints]
-    print(f'weight {key} has tensor shapes {[t.shape for t in tensors]}')
+    tensor_list: List[torch.Tensor]= [c[key] for c in checkpoints]
+    assert(tensors_have_same_shape(tensor_list))
+    print(f'weight {key} has tensor shapes {[t.shape for t in tensor_list]}')
 
 def main():
   parser = argparse.ArgumentParser()
