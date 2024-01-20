@@ -68,6 +68,9 @@ def merge_weights(
   Returns:
     None
   """
+  params = read_json(os.path.join(input_ckpt_dir, "params.json"))
+  print(params)
+
   print(f'Loading checkpoint files from {input_ckpt_dir}')
   checkpoints = [
       torch.load(path, map_location=torch.device('cpu'))
@@ -80,7 +83,8 @@ def merge_weights(
   for key in weight_keys:
     tensor_list: List[torch.Tensor]= [c[key] for c in checkpoints]
     assert(tensors_have_same_shape(tensor_list))
-    print(f'weight {key} has tensor shapes {[t.shape for t in tensor_list]}')
+
+
 
 def main():
   parser = argparse.ArgumentParser()
