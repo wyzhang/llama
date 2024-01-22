@@ -69,7 +69,8 @@ def merge_weights(
     None
   """
   params = read_json(os.path.join(input_ckpt_dir, "params.json"))
-  print(params)
+  n_layers = params['n_layers']
+  print(f'Loaded params. n_layers={n_layers}')
 
   print(f'Loading checkpoint files from {input_ckpt_dir}')
   checkpoints = [
