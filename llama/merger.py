@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import shutil
 import torch
 import glob
@@ -14,7 +13,10 @@ _MODEL_SIZE_TO_NUM_SHARDS_MAP = {
     "70B": 8,
 }
 
-_LAYER_NAME_TO_SHARDING_TYPE_MAP = {
+_WEIGHT_SHARDING_MAP = {
+    # Sharded on 1st dimension
+    # Shape: (num_embeddings, embedding_dimension_per_shard)
+    # https://github.com/facebookresearch/fairscale/blob/164cc0f3170b4a3951dd84dda29c3e1504ac4d6e/fairscale/nn/model_parallel/layers.py#L190
     'tok_embeddings.weight': 'ParallelEmbedding',
     'norm.weight': None,
     'output.weight': 'ColumnParallelLinear',
@@ -115,10 +117,11 @@ def _merge_weights(
   assert _checkpoints_have_same_weight_keys(checkpoints)
   weight_keys = checkpoints[0].keys()
   for key in weight_keys:
-    print(f'Merging weights for {key}')
     tensors: List[torch.Tensor] = [c[key] for c in checkpoints]
     assert(_tensors_have_same_shape(tensors))
-    for pattern, kind in _LAYER_NAME_TO_SHARDING_TYPE_MAP.items():
+    print(f'Merging weights across '
+          f'{len(tensors)} shards (shape = {tensors[0].shape}) for {key})')
+    for pattern, kind in _WEIGHT_SHARDING_MAP.items():
       if not key.endswith(pattern):
         continue
       assert 'key' not in state_dict
