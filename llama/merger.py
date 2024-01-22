@@ -13,20 +13,28 @@ _MODEL_SIZE_TO_NUM_SHARDS_MAP = {
 }
 
 _LAYER_NAME_TO_SHARDING_TYPE_MAP = {
-    'tok_embeddings': 'ParallelEmbedding',
-    'output': 'ColumnParallelLinear',
-    'attention.wq': 'ColumnParallelLinear',
-    'attention.wk': 'ColumnParallelLinear',
-    'attention.wv': 'ColumnParallelLinear',
-    'attention.wo': 'RowParallelLinear',
-    'feed_forward.w1': 'ColumnParallelLinear',
-    'feed_forward.w2': 'RowParallelLinear',
-    'feed_forward.w3': 'ColumnParallelLinear',
-    'attention_norm': None,
-    'ffn_norm': None,
-    'norm': None,
+    'tok_embeddings.weight': 'ParallelEmbedding',
+    'norm.weight': None,
+    'output.weight': None,
+    # layer start
+    'attention.wq.weight':'ColumnParallelLinear',
+    'attention.wk.weight': 'ColumnParallelLinear',
+    'attention.wv.weight': 'ColumnParallelLinear',
+    'attention.wo.weight':'RowParallelLinear',
+    'feed_forward.w1.weight':'ColumnParallelLinear',
+    'feed_forward.w2.weight':'RowParallelLinear',
+    'feed_forward.w3.weight':'ColumnParallelLinear',
+    'attention_norm.weight': None,
+    'ffn_norm.weight': None,
+    # layer end
     'rope.freqs': None,
 }
+
+def create_dir(target_dir:str)->None:
+  if os.path.exists(target_dir):
+    # If it exists, remove it and all its contents
+    shutil.rmtree(target_dir)
+  os.makedirs(target_dir)
 
 def checkpoints_have_same_weight_keys(checkpoint_list:List[Dict[str, torch.Tensor]]):
   if (not checkpoint_list) or len(checkpoint_list) <= 1:
@@ -79,16 +87,34 @@ def merge_weights(
   ]
   assert len(checkpoints) > 0, f'No *.pth found in input dir {input_ckpt_dir}'
 
+  print(f'Merging weights')
+  state_dict = {}
   assert checkpoints_have_same_weight_keys(checkpoints)
   weight_keys = checkpoints[0].keys()
   for key in weight_keys:
     print(f'Merging weights for {key}')
     tensors: List[torch.Tensor]= [c[key] for c in checkpoints]
     assert(tensors_have_same_shape(tensors))
+    for pattern, kind in _LAYER_NAME_TO_SHARDING_TYPE_MAP.iterms():
+      if not key.endswith(pattern):
+        continue
+      assert 'key' not in state_dict
+      with torch.no_grad():
+        if kind == 'ColumnParallelLinear':
+          assert 'key' not in state_dict
+          state_dict[key] = torch.cat(tensors, 0)
+        elif kind in ('ParallelEmbedding', 'RowParallelLinear'):
+          assert 'key' not in state_dict
+          state_dict[key] = torch.cat(tensors, 1)
+        else:
+          assert(all(torch.allclose(tensors[0], tensor, atol=1e-6)
+                     for tensor in tensors[1:]))
+          state_dict[key] = tensors[0]
 
-
-
-
+    print(f'Writing merged weights to dir {output_ckpt_dir}')
+    create_dir(output_ckpt_dir)
+    write_json(params, os.path.join(output_ckpt_dir, "params.json"))
+    torch.save(state_dict, os.path.join(output_ckpt_dir, "consolidated.00.pth"))
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument(
