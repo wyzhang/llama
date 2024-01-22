@@ -13,25 +13,25 @@ _MODEL_SIZE_TO_NUM_SHARDS_MAP = {
     "70B": 8,
 }
 
-_WEIGHT_SHARDING_MAP = {
-    # Sharded on 1st dimension
-    # Shape: (num_embeddings, embedding_dimension_per_shard)
-    # https://github.com/facebookresearch/fairscale/blob/164cc0f3170b4a3951dd84dda29c3e1504ac4d6e/fairscale/nn/model_parallel/layers.py#L190
+# ParallelEmbedding is row partitioned and the shape of each partition
+# is (num_embeddings_per_partition, embedding_dim).
+# ColumnParallelLinear is col partitioned.
+# RowParallelLinear is row partitioned.
+_WEIGHT_SHARDING_TYPE = {
     'tok_embeddings.weight': 'ParallelEmbedding',
-    'norm.weight': None,
-    'output.weight': 'ColumnParallelLinear',
-    # layer start
-    'attention.wq.weight':'ColumnParallelLinear',
+    'rope.freqs': None,
+    # ColumnParallelLinear is col partitioned
+    'attention.wq.weight': 'ColumnParallelLinear',
     'attention.wk.weight': 'ColumnParallelLinear',
     'attention.wv.weight': 'ColumnParallelLinear',
-    'attention.wo.weight':'RowParallelLinear',
-    'feed_forward.w1.weight':'ColumnParallelLinear',
-    'feed_forward.w2.weight':'RowParallelLinear',
-    'feed_forward.w3.weight':'ColumnParallelLinear',
+    'attention.wo.weight': 'RowParallelLinear',
+    'feed_forward.w1.weight': 'ColumnParallelLinear',
+    'feed_forward.w2.weight': 'RowParallelLinear',
+    'feed_forward.w3.weight': 'ColumnParallelLinear',
     'attention_norm.weight': None,
     'ffn_norm.weight': None,
-    # layer end
-    'rope.freqs': None,
+    'norm.weight': None,
+    'output.weight': 'ColumnParallelLinear',
 }
 
 def _compute_md5(file_path:str)->None:
@@ -121,7 +121,7 @@ def _merge_weights(
     assert(_tensors_have_same_shape(tensors))
     print(f'Merging weights across '
           f'{len(tensors)} shards (shape = {tensors[0].shape}) for {key})')
-    for pattern, kind in _WEIGHT_SHARDING_MAP.items():
+    for pattern, kind in _WEIGHT_SHARDING_TYPE.items():
       if not key.endswith(pattern):
         continue
       assert 'key' not in state_dict
