@@ -95,7 +95,7 @@ def merge_weights(
     print(f'Merging weights for {key}')
     tensors: List[torch.Tensor]= [c[key] for c in checkpoints]
     assert(tensors_have_same_shape(tensors))
-    for pattern, kind in _LAYER_NAME_TO_SHARDING_TYPE_MAP.iterms():
+    for pattern, kind in _LAYER_NAME_TO_SHARDING_TYPE_MAP.items():
       if not key.endswith(pattern):
         continue
       assert 'key' not in state_dict
