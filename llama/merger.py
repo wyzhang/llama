@@ -15,7 +15,7 @@ _MODEL_SIZE_TO_NUM_SHARDS_MAP = {
 _LAYER_NAME_TO_SHARDING_TYPE_MAP = {
     'tok_embeddings.weight': 'ParallelEmbedding',
     'norm.weight': None,
-    'output.weight': None,
+    'output.weight': 'ColumnParallelLinear',
     # layer start
     'attention.wq.weight':'ColumnParallelLinear',
     'attention.wk.weight': 'ColumnParallelLinear',
@@ -80,20 +80,20 @@ def merge_weights(
   n_layers = params['n_layers']
   print(f'Loaded params. n_layers={n_layers}')
 
-  print(f'Loading checkpoint files from {input_ckpt_dir}')
+  print(f'Loading checkpoint files from {input_ckpt_dir}.')
   checkpoints = [
       torch.load(path, map_location=torch.device('cpu'))
       for path in glob.glob(os.path.join(input_ckpt_dir, '*.pth'))
   ]
   assert len(checkpoints) > 0, f'No *.pth found in input dir {input_ckpt_dir}'
 
-  print(f'Merging weights')
+  print(f'Starting to merge weights.')
   state_dict = {}
   assert checkpoints_have_same_weight_keys(checkpoints)
   weight_keys = checkpoints[0].keys()
   for key in weight_keys:
     print(f'Merging weights for {key}')
-    tensors: List[torch.Tensor]= [c[key] for c in checkpoints]
+    tensors: List[torch.Tensor] = [c[key] for c in checkpoints]
     assert(tensors_have_same_shape(tensors))
     for pattern, kind in _LAYER_NAME_TO_SHARDING_TYPE_MAP.items():
       if not key.endswith(pattern):
@@ -111,10 +111,10 @@ def merge_weights(
                      for tensor in tensors[1:]))
           state_dict[key] = tensors[0]
 
-    print(f'Writing merged weights to dir {output_ckpt_dir}')
-    create_dir(output_ckpt_dir)
-    write_json(params, os.path.join(output_ckpt_dir, "params.json"))
-    torch.save(state_dict, os.path.join(output_ckpt_dir, "consolidated.00.pth"))
+  print(f'Writing merged weights to dir {output_ckpt_dir}')
+  create_dir(output_ckpt_dir)
+  write_json(params, os.path.join(output_ckpt_dir, "params.json"))
+  torch.save(state_dict, os.path.join(output_ckpt_dir, "consolidated.00.pth"))
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument(
