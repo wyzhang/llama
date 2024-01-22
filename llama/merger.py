@@ -5,6 +5,8 @@ import shutil
 import torch
 import glob
 from typing import List, Dict
+import hashlib
+import os
 
 _MODEL_SIZE_TO_NUM_SHARDS_MAP = {
     "7B": 1,
@@ -30,13 +32,34 @@ _LAYER_NAME_TO_SHARDING_TYPE_MAP = {
     'rope.freqs': None,
 }
 
-def create_dir(target_dir:str)->None:
+def _compute_md5(file_path:str)->None:
+  md5_hash = hashlib.md5()
+  with open(file_path, "rb") as file:
+    while True:
+      data = file.read(4096)  # Read in 4KB chunks
+      if not data:
+        break
+      md5_hash.update(data)
+  return md5_hash.hexdigest()
+
+def _generate_md5_checklist(target_dir:str)->None:
+  files = [os.path.join(target_dir, file)
+               for file in os.listdir(target_dir)
+               if os.path.isfile(os.path.join(target_dir, file))]
+
+  checklist_file = os.path.join(target_dir, "checklist.chk")
+  with open(checklist_file, 'w') as checklist:
+    for f in files:
+      md5_checksum = _compute_md5(f)
+      checklist.write(f'{md5_checksum}  {os.path.basename(f)}\n')
+
+def _create_dir(target_dir:str)->None:
   if os.path.exists(target_dir):
     # If it exists, remove it and all its contents
     shutil.rmtree(target_dir)
   os.makedirs(target_dir)
 
-def checkpoints_have_same_weight_keys(checkpoint_list:List[Dict[str, torch.Tensor]]):
+def _checkpoints_have_same_weight_keys(checkpoint_list:List[Dict[str, torch.Tensor]]):
   if (not checkpoint_list) or len(checkpoint_list) <= 1:
     return True
   for m in checkpoint_list[1:]:
@@ -44,7 +67,7 @@ def checkpoints_have_same_weight_keys(checkpoint_list:List[Dict[str, torch.Tenso
       return False
   return True
 
-def tensors_have_same_shape(tensors):
+def _tensors_have_same_shape(tensors):
   if (not tensors) or len(tensors) <= 1:
     return True
   # Iterate through the remaining tensors in the list
@@ -53,15 +76,15 @@ def tensors_have_same_shape(tensors):
       return False
   return True
 
-def read_json(path):
+def _read_json(path):
   with open(path, "r") as f:
     return json.load(f)
 
-def write_json(text, path):
+def _write_json(text, path):
   with open(path, "w") as f:
     json.dump(text, f)
 
-def merge_weights(
+def _merge_weights(
     input_ckpt_dir: str,
     output_ckpt_dir: str,
     model_size: str,
@@ -76,7 +99,7 @@ def merge_weights(
   Returns:
     None
   """
-  params = read_json(os.path.join(input_ckpt_dir, "params.json"))
+  params = _read_json(os.path.join(input_ckpt_dir, "params.json"))
   n_layers = params['n_layers']
   print(f'Loaded params. n_layers={n_layers}')
 
@@ -89,12 +112,12 @@ def merge_weights(
 
   print(f'Starting to merge weights.')
   state_dict = {}
-  assert checkpoints_have_same_weight_keys(checkpoints)
+  assert _checkpoints_have_same_weight_keys(checkpoints)
   weight_keys = checkpoints[0].keys()
   for key in weight_keys:
     print(f'Merging weights for {key}')
     tensors: List[torch.Tensor] = [c[key] for c in checkpoints]
-    assert(tensors_have_same_shape(tensors))
+    assert(_tensors_have_same_shape(tensors))
     for pattern, kind in _LAYER_NAME_TO_SHARDING_TYPE_MAP.items():
       if not key.endswith(pattern):
         continue
@@ -112,8 +135,8 @@ def merge_weights(
           state_dict[key] = tensors[0]
 
   print(f'Writing merged weights to dir {output_ckpt_dir}')
-  create_dir(output_ckpt_dir)
-  write_json(params, os.path.join(output_ckpt_dir, "params.json"))
+  _create_dir(output_ckpt_dir)
+  _write_json(params, os.path.join(output_ckpt_dir, "params.json"))
   torch.save(state_dict, os.path.join(output_ckpt_dir, "consolidated.00.pth"))
 def main():
   parser = argparse.ArgumentParser()
@@ -137,7 +160,7 @@ def main():
   )
   args = parser.parse_args()
 
-  merge_weights(
+  _merge_weights(
       input_ckpt_dir=args.input_ckpt_dir,
       model_size=args.model_size,
       output_ckpt_dir=args.output_ckpt_dir
